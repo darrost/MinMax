@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,28 +7,36 @@ import { ActivityIndicator, AppState, Button, FlatList, ScrollView, StyleSheet, 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen from './AddGameScreen';
 import AuthScreen from './AuthScreen';
+import { loadGames, saveGame } from './games';
 import { supabase } from './supabase';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const LibraryContext = createContext(null);
 
-// Temporary entries for testing navigation before the API is connected.
-const previewGames = [
-  { id: 'pathfinder-wotr', title: 'Pathfinder: Wrath of the Righteous', platform: 'PC' },
-  { id: 'elden-ring', title: 'Elden Ring', platform: 'PC' },
-];
-
 function LibraryScreen({ navigation }) {
-  const { games } = useContext(LibraryContext);
+  const { games, loading, loadError, refresh } = useContext(LibraryContext);
 
   return (
     <FlatList
       data={games}
       keyExtractor={(game) => game.id}
       contentContainerStyle={styles.content}
+      refreshing={loading}
+      onRefresh={refresh}
       ListHeaderComponent={
-        <Button title="Add game" onPress={() => navigation.navigate('AddGame')} />
+        <View style={styles.libraryHeader}>
+          <Button title="Add game" onPress={() => navigation.navigate('AddGame')} />
+          {loadError && (
+            <View>
+              <Text accessibilityRole="alert">Could not load your games.</Text>
+              <Button title="Try again" onPress={refresh} />
+            </View>
+          )}
+        </View>
+      }
+      ListEmptyComponent={
+        !loading && !loadError ? <Text>Add your first game to start your library.</Text> : null
       }
       renderItem={({ item }) => (
         <Button
@@ -99,18 +107,53 @@ function AddGameRoute({ navigation }) {
   return <AddGameScreen navigation={navigation} onSave={addGame} />;
 }
 
-function LibraryNavigator() {
-  const [games, setGames] = useState(previewGames);
-  const nextGameId = useRef(1);
+function LibraryNavigator({ userId }) {
+  const [games, setGames] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const loadRequest = useRef(null);
 
-  function addGame(game) {
-    const id = 'local-' + nextGameId.current;
-    nextGameId.current += 1;
-    setGames((currentGames) => [{ ...game, id }, ...currentGames]);
+  const refresh = useCallback(async () => {
+    loadRequest.current?.controller.abort();
+    const request = { controller: new AbortController(), savedGames: new Map() };
+    loadRequest.current = request;
+    setLoading(true);
+    setLoadError(false);
+
+    try {
+      const results = await loadGames(userId, request.controller.signal);
+      if (loadRequest.current === request) {
+        // A save can finish after this request has already read the library.
+        const gamesById = new Map(request.savedGames);
+        for (const game of results) gamesById.set(game.id, game);
+        setGames([...gamesById.values()]);
+      }
+    } catch {
+      if (loadRequest.current === request) setLoadError(true);
+    } finally {
+      if (loadRequest.current === request) {
+        loadRequest.current = null;
+        setLoading(false);
+      }
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void refresh();
+    return () => {
+      loadRequest.current?.controller.abort();
+      loadRequest.current = null;
+    };
+  }, [refresh]);
+
+  async function addGame(game, requestId) {
+    const savedGame = await saveGame(userId, game, requestId);
+    loadRequest.current?.savedGames.set(savedGame.id, savedGame);
+    setGames((currentGames) => [savedGame, ...currentGames.filter(({ id }) => id !== savedGame.id)]);
   }
 
   return (
-    <LibraryContext.Provider value={{ games, addGame }}>
+    <LibraryContext.Provider value={{ games, addGame, loading, loadError, refresh }}>
       <Stack.Navigator>
         <Stack.Screen name="GameLibrary" component={LibraryScreen} options={{ title: 'Library' }} />
         <Stack.Screen name="AddGame" component={AddGameRoute} options={{ title: 'Add Game' }} />
@@ -178,7 +221,9 @@ export default function App() {
       <StatusBar style="auto" />
       {session ? (
         <Tab.Navigator key={session.user.id}>
-          <Tab.Screen name="Library" component={LibraryNavigator} options={{ headerShown: false }} />
+          <Tab.Screen name="Library" options={{ headerShown: false }}>
+            {() => <LibraryNavigator userId={session.user.id} />}
+          </Tab.Screen>
           <Tab.Screen name="About">
             {() => <AboutScreen email={session.user.email} />}
           </Tab.Screen>
@@ -202,6 +247,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     gap: 16,
+  },
+  libraryHeader: {
+    gap: 16,
+    marginBottom: 16,
   },
   noteLabel: {
     fontWeight: '600',

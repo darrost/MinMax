@@ -37,20 +37,40 @@ export default function AddGameScreen({ navigation, onSave }) {
   const [status, setStatus] = useState(null);
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const saved = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const savingRef = useRef(false);
+  const lastAttempt = useRef(null);
   const cleanTitle = title.trim();
   const titleInvalid = cleanTitle.length < 2;
 
-  function handleSave() {
+  async function handleSave() {
     setSubmitted(true);
 
-    if (titleInvalid || !platform || !status || saved.current) {
+    if (titleInvalid || !platform || !status || savingRef.current) {
       return;
     }
 
-    saved.current = true;
-    onSave({ title: cleanTitle, platform, status, notes: notes.trim() });
-    navigation.goBack();
+    const game = { title: cleanTitle, platform, status, notes: notes.trim() };
+    const draft = JSON.stringify(game);
+    if (lastAttempt.current?.draft !== draft) {
+      // The server uses this token only to recognize a retry of the same save.
+      const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+      lastAttempt.current = { draft, requestId };
+    }
+
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(false);
+    try {
+      await onSave(game, lastAttempt.current.requestId);
+      if (navigation.isFocused()) navigation.goBack();
+    } catch {
+      setSaveError(true);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (
@@ -98,7 +118,12 @@ export default function AddGameScreen({ navigation, onSave }) {
         />
       </View>
 
-      <Button title="Save game" onPress={handleSave} />
+      {saveError && (
+        <Text accessibilityRole="alert" style={styles.error}>
+          Could not confirm the save. Check your connection and try again.
+        </Text>
+      )}
+      <Button title={saving ? 'Saving…' : 'Save game'} onPress={handleSave} disabled={saving} />
     </ScrollView>
   );
 }

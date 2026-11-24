@@ -48,3 +48,28 @@ export async function saveGame(userId, game, requestId) {
   if (existing.error) throw existing.error;
   return existing.data;
 }
+
+export async function updateGame(userId, gameId, { title, platform, status, notes }) {
+  const { data, error } = await supabase
+    .from('games')
+    .update({ title, platform, status, notes })
+    .eq('id', gameId)
+    .eq('user_id', userId)
+    .select(gameColumns)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteGame(userId, gameId) {
+  const { error } = await supabase
+    .from('games')
+    .delete()
+    .eq('id', gameId)
+    .eq('user_id', userId)
+    .select('id')
+    .single();
+
+  if (error) throw error;
+}

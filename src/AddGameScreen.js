@@ -31,11 +31,11 @@ function GameChoices({ label, options, value, onChange }) {
   );
 }
 
-export default function AddGameScreen({ navigation, onSave }) {
-  const [title, setTitle] = useState('');
-  const [platform, setPlatform] = useState(null);
-  const [status, setStatus] = useState(null);
-  const [notes, setNotes] = useState('');
+export default function AddGameScreen({ navigation, onSave, initialGame }) {
+  const [title, setTitle] = useState(initialGame?.title ?? '');
+  const [platform, setPlatform] = useState(initialGame?.platform ?? null);
+  const [status, setStatus] = useState(initialGame?.status ?? null);
+  const [notes, setNotes] = useState(initialGame?.notes ?? '');
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -52,18 +52,21 @@ export default function AddGameScreen({ navigation, onSave }) {
     }
 
     const game = { title: cleanTitle, platform, status, notes: notes.trim() };
-    const draft = JSON.stringify(game);
-    if (lastAttempt.current?.draft !== draft) {
-      // The server uses this token only to recognize a retry of the same save.
-      const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-      lastAttempt.current = { draft, requestId };
-    }
-
     savingRef.current = true;
     setSaving(true);
     setSaveError(false);
     try {
-      await onSave(game, lastAttempt.current.requestId);
+      if (initialGame) {
+        await onSave(game);
+      } else {
+        const draft = JSON.stringify(game);
+        if (lastAttempt.current?.draft !== draft) {
+          // The server uses this token only to recognize a retry of the same save.
+          const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+          lastAttempt.current = { draft, requestId };
+        }
+        await onSave(game, lastAttempt.current.requestId);
+      }
       if (navigation.isFocused()) navigation.goBack();
     } catch {
       setSaveError(true);
@@ -123,7 +126,11 @@ export default function AddGameScreen({ navigation, onSave }) {
           Could not confirm the save. Check your connection and try again.
         </Text>
       )}
-      <Button title={saving ? 'Saving…' : 'Save game'} onPress={handleSave} disabled={saving} />
+      <Button
+        title={saving ? 'Saving…' : initialGame ? 'Save changes' : 'Save game'}
+        onPress={handleSave}
+        disabled={saving}
+      />
     </ScrollView>
   );
 }

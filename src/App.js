@@ -3,11 +3,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, AppState, Button, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Button, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen from './AddGameScreen';
 import AuthScreen from './AuthScreen';
-import { loadGames, saveGame } from './games';
+import { deleteGame, loadGames, saveGame, updateGame } from './games';
 import { supabase } from './supabase';
 
 const Tab = createBottomTabNavigator();
@@ -48,9 +48,36 @@ function LibraryScreen({ navigation }) {
   );
 }
 
-function GameDetailsScreen({ route }) {
-  const { games } = useContext(LibraryContext);
+function GameDetailsScreen({ navigation, route }) {
+  const { games, removeGame } = useContext(LibraryContext);
   const game = games.find(({ id }) => id === route.params?.gameId);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const deletingRef = useRef(false);
+
+  function confirmDelete() {
+    Alert.alert('Delete game?', `Remove “${game.title}” from your library?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => handleDelete(game.id) },
+    ]);
+  }
+
+  async function handleDelete(gameId) {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteError(false);
+
+    try {
+      await removeGame(gameId);
+      if (navigation.isFocused()) navigation.goBack();
+    } catch {
+      setDeleteError(true);
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -64,6 +91,22 @@ function GameDetailsScreen({ route }) {
               <Text style={styles.noteLabel}>Where I left off</Text>
               <Text>{game.notes}</Text>
             </View>
+          )}
+          <Button
+            title="Edit game"
+            disabled={deleting}
+            onPress={() => navigation.navigate('EditGame', { gameId: game.id })}
+          />
+          <Button
+            title={deleting ? 'Deleting…' : 'Delete game'}
+            color="#a21830"
+            disabled={deleting}
+            onPress={confirmDelete}
+          />
+          {deleteError && (
+            <Text accessibilityRole="alert">
+              Could not confirm deletion. Refresh the library or try again.
+            </Text>
           )}
         </>
       ) : (
@@ -107,6 +150,24 @@ function AddGameRoute({ navigation }) {
   return <AddGameScreen navigation={navigation} onSave={addGame} />;
 }
 
+function EditGameRoute({ navigation, route }) {
+  const { games, editGame } = useContext(LibraryContext);
+  const game = games.find(({ id }) => id === route.params?.gameId);
+
+  if (!game) {
+    return <View style={styles.content}><Text>Game unavailable.</Text></View>;
+  }
+
+  return (
+    <AddGameScreen
+      key={game.id}
+      navigation={navigation}
+      initialGame={game}
+      onSave={(changes) => editGame(game.id, changes)}
+    />
+  );
+}
+
 function LibraryNavigator({ userId }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,19 +175,16 @@ function LibraryNavigator({ userId }) {
   const loadRequest = useRef(null);
 
   const refresh = useCallback(async () => {
-    loadRequest.current?.controller.abort();
-    const request = { controller: new AbortController(), savedGames: new Map() };
+    loadRequest.current?.abort();
+    const request = new AbortController();
     loadRequest.current = request;
     setLoading(true);
     setLoadError(false);
 
     try {
-      const results = await loadGames(userId, request.controller.signal);
+      const results = await loadGames(userId, request.signal);
       if (loadRequest.current === request) {
-        // A save can finish after this request has already read the library.
-        const gamesById = new Map(request.savedGames);
-        for (const game of results) gamesById.set(game.id, game);
-        setGames([...gamesById.values()]);
+        setGames(results);
       }
     } catch {
       if (loadRequest.current === request) setLoadError(true);
@@ -141,22 +199,38 @@ function LibraryNavigator({ userId }) {
   useEffect(() => {
     void refresh();
     return () => {
-      loadRequest.current?.controller.abort();
+      loadRequest.current?.abort();
       loadRequest.current = null;
     };
   }, [refresh]);
 
+  function applyGameChange(updateGames) {
+    setGames(updateGames);
+    // Restart any in-flight refresh that may have fetched pre-mutation rows.
+    if (loadRequest.current) void refresh();
+  }
+
   async function addGame(game, requestId) {
     const savedGame = await saveGame(userId, game, requestId);
-    loadRequest.current?.savedGames.set(savedGame.id, savedGame);
-    setGames((currentGames) => [savedGame, ...currentGames.filter(({ id }) => id !== savedGame.id)]);
+    applyGameChange((currentGames) => [savedGame, ...currentGames.filter(({ id }) => id !== savedGame.id)]);
+  }
+
+  async function editGame(gameId, changes) {
+    const savedGame = await updateGame(userId, gameId, changes);
+    applyGameChange((currentGames) => currentGames.map((game) => (game.id === gameId ? savedGame : game)));
+  }
+
+  async function removeGame(gameId) {
+    await deleteGame(userId, gameId);
+    applyGameChange((currentGames) => currentGames.filter(({ id }) => id !== gameId));
   }
 
   return (
-    <LibraryContext.Provider value={{ games, addGame, loading, loadError, refresh }}>
+    <LibraryContext.Provider value={{ games, addGame, editGame, removeGame, loading, loadError, refresh }}>
       <Stack.Navigator>
         <Stack.Screen name="GameLibrary" component={LibraryScreen} options={{ title: 'Library' }} />
         <Stack.Screen name="AddGame" component={AddGameRoute} options={{ title: 'Add Game' }} />
+        <Stack.Screen name="EditGame" component={EditGameRoute} options={{ title: 'Edit Game' }} />
         <Stack.Screen
           name="GameDetails"
           component={GameDetailsScreen}

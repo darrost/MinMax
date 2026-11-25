@@ -1,7 +1,7 @@
 import { removeUnusedGameCover, uploadGameCover } from './gameCovers';
 import { supabase } from './supabase';
 
-const gameColumns = 'id, title, platform, status, notes, cover_path';
+const gameColumns = 'id, title, platform, extra_platforms, cross_save, status, notes, cover_path';
 const pageSize = 100;
 
 export async function loadGames(userId, signal) {
@@ -51,8 +51,8 @@ export async function saveGame(userId, game, requestId, coverUri) {
   return existing.data;
 }
 
-export async function updateGame(userId, gameId, { title, platform, status, notes }, requestId, coverChange) {
-  const changes = { title, platform, status, notes };
+export async function updateGame(userId, gameId, { title, platform, extra_platforms, cross_save, status, notes }, requestId, coverChange) {
+  const changes = { title, platform, extra_platforms, cross_save, status, notes };
   let previousCoverPath;
 
   if (coverChange !== undefined) {

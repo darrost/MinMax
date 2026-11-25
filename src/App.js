@@ -48,7 +48,7 @@ function LibraryScreen({ navigation }) {
           {item.cover_path && <GameCover key={item.cover_path} path={item.cover_path} thumbnail />}
           <View style={styles.gameSummary}>
             <Text style={styles.gameTitle}>{item.title}</Text>
-            <Text style={styles.gameMeta}>{[item.platform, item.status].filter(Boolean).join(' · ')}</Text>
+            <Text style={styles.gameMeta}>{[item.platform, ...(item.extra_platforms ?? [])].join(', ')} · {item.status}</Text>
           </View>
         </Pressable>
       )}
@@ -93,7 +93,7 @@ function GameDetailsScreen({ navigation, route }) {
         <>
           <Text accessibilityRole="header" style={styles.heading}>{game.title}</Text>
           {game.cover_path && <GameCover key={game.cover_path} path={game.cover_path} />}
-          <Text>Platform: {game.platform}</Text>
+          <Text>{game.cross_save ? 'Cross-platform save' : 'Platform'}: {[game.platform, ...(game.extra_platforms ?? [])].join(', ')}</Text>
           {game.status && <Text>Status: {game.status}</Text>}
           {game.notes && (
             <View>

@@ -9,18 +9,18 @@ const platforms = ['PC', 'PlayStation', 'Xbox', 'Nintendo', 'Mobile', 'Other'];
 const statuses = ['Want to play', 'Playing', 'Paused', 'Finished'];
 const maxCoverDimension = 1200;
 
-function GameChoices({ label, options, value, onChange, disabled }) {
+function GameChoices({ label, options, value, onChange, disabled, multiple = false }) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.choices} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      <View style={styles.choices} accessibilityRole={multiple ? undefined : 'radiogroup'} accessibilityLabel={label}>
         {options.map((option) => {
-          const selected = value === option;
+          const selected = multiple ? value.includes(option) : value === option;
 
           return (
             <Pressable
               key={option}
-              accessibilityRole="radio"
+              accessibilityRole={multiple ? 'checkbox' : 'radio'}
               accessibilityState={{ checked: selected, disabled }}
               disabled={disabled}
               onPress={() => onChange(option)}
@@ -39,7 +39,18 @@ function GameChoices({ label, options, value, onChange, disabled }) {
 
 export default function AddGameScreen({ navigation, onSave, initialGame }) {
   const [title, setTitle] = useState(initialGame?.title ?? '');
-  const [platform, setPlatform] = useState(initialGame?.platform ?? null);
+  const [crossSave, setCrossSave] = useState(initialGame?.cross_save ?? false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState(
+    initialGame ? [initialGame.platform, ...(initialGame.extra_platforms ?? [])] : [],
+  );
+  const [platform, ...extraPlatforms] = selectedPlatforms;
+
+  function choosePlatform(option) {
+    if (!crossSave) return setSelectedPlatforms([option]);
+    setSelectedPlatforms(current => current.includes(option)
+      ? current.filter(item => item !== option)
+      : [...current, option]);
+  }
   const [status, setStatus] = useState(initialGame?.status ?? null);
   const [notes, setNotes] = useState(initialGame?.notes ?? '');
   const [coverChange, setCoverChange] = useState(undefined);
@@ -88,7 +99,7 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
       return;
     }
 
-    const game = { title: cleanTitle, platform, status, notes: notes.trim() };
+    const game = { title: cleanTitle, platform, extra_platforms: extraPlatforms, cross_save: crossSave, status, notes: notes.trim() };
     savingRef.current = true;
     setSaving(true);
     setSaveError('');
@@ -134,7 +145,21 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
         )}
       </View>
 
-      <GameChoices label="Platform" options={platforms} value={platform} onChange={setPlatform} disabled={saving} />
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityLabel="Cross-platform save"
+        accessibilityState={{ checked: crossSave, disabled: saving }}
+        disabled={saving}
+        style={styles.choice}
+        onPress={() => {
+          if (crossSave) setSelectedPlatforms(current => current.slice(0, 1));
+          setCrossSave(!crossSave);
+        }}
+      >
+        <Text style={styles.choiceText}>{crossSave ? '☑' : '☐'}  Cross-platform save</Text>
+      </Pressable>
+      <GameChoices label={crossSave ? 'Platforms (select all that apply)' : 'Platform'} options={platforms}
+        value={crossSave ? selectedPlatforms : platform} multiple={crossSave} onChange={choosePlatform} disabled={saving} />
       {submitted && !platform && (
         <Text accessibilityRole="alert" style={styles.error}>Choose a platform.</Text>
       )}

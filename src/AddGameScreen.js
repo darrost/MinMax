@@ -9,7 +9,7 @@ const platforms = ['PC', 'PlayStation', 'Xbox', 'Nintendo', 'Mobile', 'Other'];
 const statuses = ['Want to play', 'Playing', 'Paused', 'Finished'];
 const maxCoverDimension = 1200;
 
-function GameChoices({ label, options, value, onChange }) {
+function GameChoices({ label, options, value, onChange, disabled }) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -21,7 +21,8 @@ function GameChoices({ label, options, value, onChange }) {
             <Pressable
               key={option}
               accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
+              accessibilityState={{ checked: selected, disabled }}
+              disabled={disabled}
               onPress={() => onChange(option)}
               style={[styles.choice, selected && styles.selectedChoice]}
             >
@@ -120,6 +121,7 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
         <Text style={styles.label}>Game title</Text>
         <TextInput
           accessibilityLabel="Game title"
+          editable={!saving}
           style={styles.input}
           value={title}
           onChangeText={setTitle}
@@ -132,12 +134,12 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
         )}
       </View>
 
-      <GameChoices label="Platform" options={platforms} value={platform} onChange={setPlatform} />
+      <GameChoices label="Platform" options={platforms} value={platform} onChange={setPlatform} disabled={saving} />
       {submitted && !platform && (
         <Text accessibilityRole="alert" style={styles.error}>Choose a platform.</Text>
       )}
 
-      <GameChoices label="Status" options={statuses} value={status} onChange={setStatus} />
+      <GameChoices label="Status" options={statuses} value={status} onChange={setStatus} disabled={saving} />
       {submitted && !status && (
         <Text accessibilityRole="alert" style={styles.error}>Choose a status.</Text>
       )}
@@ -146,6 +148,7 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
         <Text style={styles.label}>Where I left off (optional)</Text>
         <TextInput
           accessibilityLabel="Where I left off"
+          editable={!saving}
           style={[styles.input, styles.notes]}
           value={notes}
           onChangeText={setNotes}

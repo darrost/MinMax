@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, AppState, Button, FlatList, ScrollView, Style
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen from './AddGameScreen';
 import AuthScreen from './AuthScreen';
+import GameCover from './GameCover';
 import { deleteGame, loadGames, saveGame, updateGame } from './games';
 import { supabase } from './supabase';
 
@@ -84,6 +85,7 @@ function GameDetailsScreen({ navigation, route }) {
       {game ? (
         <>
           <Text accessibilityRole="header" style={styles.heading}>{game.title}</Text>
+          {game.cover_path && <GameCover key={game.cover_path} path={game.cover_path} />}
           <Text>Platform: {game.platform}</Text>
           {game.status && <Text>Status: {game.status}</Text>}
           {game.notes && (
@@ -163,7 +165,7 @@ function EditGameRoute({ navigation, route }) {
       key={game.id}
       navigation={navigation}
       initialGame={game}
-      onSave={(changes) => editGame(game.id, changes)}
+      onSave={(changes, requestId, coverChange) => editGame(game.id, changes, requestId, coverChange)}
     />
   );
 }
@@ -210,13 +212,13 @@ function LibraryNavigator({ userId }) {
     if (loadRequest.current) void refresh();
   }
 
-  async function addGame(game, requestId) {
-    const savedGame = await saveGame(userId, game, requestId);
+  async function addGame(game, requestId, coverUri) {
+    const savedGame = await saveGame(userId, game, requestId, coverUri);
     applyGameChange((currentGames) => [savedGame, ...currentGames.filter(({ id }) => id !== savedGame.id)]);
   }
 
-  async function editGame(gameId, changes) {
-    const savedGame = await updateGame(userId, gameId, changes);
+  async function editGame(gameId, changes, requestId, coverChange) {
+    const savedGame = await updateGame(userId, gameId, changes, requestId, coverChange);
     applyGameChange((currentGames) => currentGames.map((game) => (game.id === gameId ? savedGame : game)));
   }
 

@@ -1,8 +1,13 @@
 import { useRef, useState } from 'react';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { launchImageLibraryAsync } from 'expo-image-picker';
 import { Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import GameCover from './GameCover';
+import { CoverUploadError } from './gameCovers';
 
 const platforms = ['PC', 'PlayStation', 'Xbox', 'Nintendo', 'Mobile', 'Other'];
 const statuses = ['Want to play', 'Playing', 'Paused', 'Finished'];
+const maxCoverDimension = 1200;
 
 function GameChoices({ label, options, value, onChange }) {
   return (
@@ -36,40 +41,69 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
   const [platform, setPlatform] = useState(initialGame?.platform ?? null);
   const [status, setStatus] = useState(initialGame?.status ?? null);
   const [notes, setNotes] = useState(initialGame?.notes ?? '');
+  const [coverChange, setCoverChange] = useState(undefined);
+  const [pickingCover, setPickingCover] = useState(false);
+  const [pickerError, setPickerError] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const savingRef = useRef(false);
+  const pickingCoverRef = useRef(false);
   const lastAttempt = useRef(null);
   const cleanTitle = title.trim();
   const titleInvalid = cleanTitle.length < 2;
+  const savedCoverPath = coverChange === undefined ? initialGame?.cover_path : null;
+  const displayedCover = coverChange ?? savedCoverPath;
+
+  async function chooseCover() {
+    if (savingRef.current || pickingCoverRef.current) return;
+    pickingCoverRef.current = true;
+    setPickingCover(true);
+    setPickerError(false);
+
+    try {
+      const result = await launchImageLibraryAsync({ mediaTypes: ['images'] });
+      if (result.canceled) return;
+
+      const context = ImageManipulator.manipulate(result.assets[0].uri, {
+        maxWidth: maxCoverDimension,
+        maxHeight: maxCoverDimension,
+      });
+      const image = await context.renderAsync();
+      const resized = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
+      setCoverChange(resized.uri);
+    } catch {
+      setPickerError(true);
+    } finally {
+      pickingCoverRef.current = false;
+      setPickingCover(false);
+    }
+  }
 
   async function handleSave() {
     setSubmitted(true);
 
-    if (titleInvalid || !platform || !status || savingRef.current) {
+    if (titleInvalid || !platform || !status || savingRef.current || pickingCoverRef.current) {
       return;
     }
 
     const game = { title: cleanTitle, platform, status, notes: notes.trim() };
     savingRef.current = true;
     setSaving(true);
-    setSaveError(false);
+    setSaveError('');
     try {
-      if (initialGame) {
-        await onSave(game);
-      } else {
-        const draft = JSON.stringify(game);
-        if (lastAttempt.current?.draft !== draft) {
-          // The server uses this token only to recognize a retry of the same save.
-          const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-          lastAttempt.current = { draft, requestId };
-        }
-        await onSave(game, lastAttempt.current.requestId);
+      const draft = JSON.stringify({ ...game, coverChange });
+      if (lastAttempt.current?.draft !== draft) {
+        // The game insert and cover upload reuse this token on a retry.
+        const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+        lastAttempt.current = { draft, requestId };
       }
+      await onSave(game, lastAttempt.current.requestId, coverChange);
       if (navigation.isFocused()) navigation.goBack();
-    } catch {
-      setSaveError(true);
+    } catch (error) {
+      setSaveError(error instanceof CoverUploadError
+        ? error.message
+        : 'Could not confirm the save. Check your connection and try again.');
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -121,15 +155,42 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
         />
       </View>
 
-      {saveError && (
+      <View style={styles.field}>
+        <Text style={styles.label}>Cover photo (optional)</Text>
+        {displayedCover && (
+          <GameCover key={displayedCover} path={savedCoverPath} localUri={coverChange} />
+        )}
+        <Button
+          title={pickingCover ? 'Preparing cover…' : displayedCover ? 'Replace cover' : 'Choose cover'}
+          onPress={chooseCover}
+          disabled={saving || pickingCover}
+        />
+        {displayedCover && (
+          <Button
+            title="Remove cover"
+            onPress={() => {
+              setCoverChange(null);
+              setPickerError(false);
+            }}
+            disabled={saving || pickingCover}
+          />
+        )}
+        {pickerError && (
+          <Text accessibilityRole="alert" style={styles.error}>
+            Could not open or prepare that photo. Try choosing another one.
+          </Text>
+        )}
+      </View>
+
+      {saveError !== '' && (
         <Text accessibilityRole="alert" style={styles.error}>
-          Could not confirm the save. Check your connection and try again.
+          {saveError}
         </Text>
       )}
       <Button
         title={saving ? 'Saving…' : initialGame ? 'Save changes' : 'Save game'}
         onPress={handleSave}
-        disabled={saving}
+        disabled={saving || pickingCover}
       />
     </ScrollView>
   );

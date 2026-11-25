@@ -1,6 +1,7 @@
+import { removeUnusedGameCover, uploadGameCover } from './gameCovers';
 import { supabase } from './supabase';
 
-const gameColumns = 'id, title, platform, status, notes';
+const gameColumns = 'id, title, platform, status, notes, cover_path';
 const pageSize = 100;
 
 export async function loadGames(userId, signal) {
@@ -25,11 +26,12 @@ export async function loadGames(userId, signal) {
   }
 }
 
-export async function saveGame(userId, game, requestId) {
+export async function saveGame(userId, game, requestId, coverUri) {
+  const coverPath = coverUri ? await uploadGameCover(userId, requestId, coverUri) : null;
   const { data, error } = await supabase
     .from('games')
     .upsert(
-      { ...game, user_id: userId, request_id: requestId },
+      { ...game, user_id: userId, request_id: requestId, cover_path: coverPath },
       { onConflict: 'user_id,request_id', ignoreDuplicates: true },
     )
     .select(gameColumns)
@@ -49,27 +51,53 @@ export async function saveGame(userId, game, requestId) {
   return existing.data;
 }
 
-export async function updateGame(userId, gameId, { title, platform, status, notes }) {
-  const { data, error } = await supabase
-    .from('games')
-    .update({ title, platform, status, notes })
-    .eq('id', gameId)
-    .eq('user_id', userId)
-    .select(gameColumns)
-    .single();
+export async function updateGame(userId, gameId, { title, platform, status, notes }, requestId, coverChange) {
+  const changes = { title, platform, status, notes };
+  let previousCoverPath;
 
+  if (coverChange !== undefined) {
+    const current = await supabase
+      .from('games')
+      .select('cover_path')
+      .eq('id', gameId)
+      .eq('user_id', userId)
+      .single();
+    if (current.error) throw current.error;
+
+    previousCoverPath = current.data.cover_path;
+    changes.cover_path = coverChange ? await uploadGameCover(userId, requestId, coverChange) : null;
+  }
+
+  let query = supabase
+    .from('games')
+    .update(changes)
+    .eq('id', gameId)
+    .eq('user_id', userId);
+
+  // A concurrent replacement may change which file belongs to the game.
+  if (previousCoverPath === null) {
+    query = query.is('cover_path', null);
+  } else if (previousCoverPath !== undefined) {
+    query = query.eq('cover_path', previousCoverPath);
+  }
+
+  const { data, error } = await query.select(gameColumns).single();
   if (error) throw error;
+  if (previousCoverPath && previousCoverPath !== data.cover_path) {
+    void removeUnusedGameCover(previousCoverPath);
+  }
   return data;
 }
 
 export async function deleteGame(userId, gameId) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('games')
     .delete()
     .eq('id', gameId)
     .eq('user_id', userId)
-    .select('id')
+    .select('cover_path')
     .single();
 
   if (error) throw error;
+  void removeUnusedGameCover(data.cover_path);
 }

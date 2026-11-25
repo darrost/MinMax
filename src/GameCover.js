@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Image, StyleSheet, Text, View } from 'react-native';
 import { loadGameCoverUrl } from './gameCovers';
 
-export default function GameCover({ path, localUri }) {
+export default function GameCover({ path, localUri, thumbnail = false }) {
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -19,6 +19,7 @@ export default function GameCover({ path, localUri }) {
   }, [path, attempt]);
 
   if (failed) {
+    if (thumbnail) return null;
     return (
       <View>
         <Text accessibilityRole="alert">Could not display the cover photo.</Text>
@@ -37,21 +38,49 @@ export default function GameCover({ path, localUri }) {
   }
 
   const uri = localUri ?? url;
-  if (!uri) return <ActivityIndicator accessibilityLabel="Loading cover photo" />;
+  if (!uri) {
+    if (thumbnail) return <View style={styles.thumbnail} />;
+    return <ActivityIndicator accessibilityLabel="Loading cover photo" />;
+  }
 
-  return (
+  const photo = (
     <Image
-      accessibilityLabel="Game cover photo"
-      accessible
+      accessibilityLabel={thumbnail ? undefined : 'Game cover photo'}
+      accessible={!thumbnail}
       source={{ uri }}
-      resizeMode="contain"
+      resizeMode={thumbnail ? 'cover' : 'contain'}
       onError={() => setFailed(true)}
-      style={styles.cover}
+      style={thumbnail ? styles.thumbnail : styles.cover}
     />
+  );
+
+  if (!thumbnail) return photo;
+  return (
+    <>
+      <Image
+        accessible={false}
+        pointerEvents="none"
+        source={{ uri }}
+        resizeMode="cover"
+        blurRadius={22}
+        style={styles.rowTint}
+      />
+      {photo}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  rowTint: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.13,
+  },
+  thumbnail: {
+    width: 88,
+    height: 64,
+    borderRadius: 6,
+    backgroundColor: '#edf1f6',
+  },
   cover: {
     width: '100%',
     height: 200,

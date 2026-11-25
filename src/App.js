@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Alert, AppState, Button, FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Button, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen from './AddGameScreen';
 import AuthScreen from './AuthScreen';
@@ -40,10 +40,17 @@ function LibraryScreen({ navigation }) {
         !loading && !loadError ? <Text>Add your first game to start your library.</Text> : null
       }
       renderItem={({ item }) => (
-        <Button
-          title={item.title}
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.gameRow, pressed && styles.gameRowPressed]}
           onPress={() => navigation.navigate('GameDetails', { gameId: item.id })}
-        />
+        >
+          {item.cover_path && <GameCover key={item.cover_path} path={item.cover_path} thumbnail />}
+          <View style={styles.gameSummary}>
+            <Text style={styles.gameTitle}>{item.title}</Text>
+            <Text style={styles.gameMeta}>{[item.platform, item.status].filter(Boolean).join(' · ')}</Text>
+          </View>
+        </Pressable>
       )}
     />
   );
@@ -327,6 +334,31 @@ const styles = StyleSheet.create({
   libraryHeader: {
     gap: 16,
     marginBottom: 16,
+  },
+  gameRow: {
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  gameRowPressed: {
+    backgroundColor: '#e3edf8',
+  },
+  gameSummary: {
+    flex: 1,
+    gap: 4,
+  },
+  gameTitle: {
+    color: '#182134',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  gameMeta: {
+    color: '#485970',
+    fontSize: 15,
   },
   noteLabel: {
     fontWeight: '600',

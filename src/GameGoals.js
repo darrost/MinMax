@@ -9,6 +9,7 @@ export default function GameGoals({ gameId, onChange }) {
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState('');
   const [requirement, setRequirement] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,11 +66,11 @@ export default function GameGoals({ gameId, onChange }) {
     setAdding(false);
   }
 
-  async function toggle(goal) {
-    const { data, error } = await supabase.from('game_goals').update({ completed: !goal.completed })
-      .eq('game_id', gameId).eq('id', goal.id).select(columns).single();
+  async function updateGoal(id, changes) {
+    const { data, error } = await supabase.from('game_goals').update(changes)
+      .eq('game_id', gameId).eq('id', id).select(columns).single();
     if (error) throw error;
-    setGoals(current => current.map(item => item.id === goal.id ? data : item));
+    setGoals(current => current.map(item => item.id === id ? data : item));
   }
 
   function confirmDelete(goal) {
@@ -83,6 +84,26 @@ export default function GameGoals({ gameId, onChange }) {
     ]);
   }
 
+  const formOpen = adding || editingId !== null;
+  const form = formOpen && (
+    <View style={styles.section}>
+      <Text>Goal</Text>
+      <TextInput accessibilityLabel="Goal" style={styles.input} maxLength={100} value={title} editable={!busy} onChangeText={setTitle} />
+      <Text>Requirement (optional)</Text>
+      <TextInput accessibilityLabel="Requirement" style={styles.input} multiline maxLength={500} value={requirement} editable={!busy} onChangeText={setRequirement} />
+      <Button title={adding ? 'Save goal' : 'Save changes'} disabled={busy || !title.trim()} onPress={() => saveChange(async () => {
+        if (adding) return addGoal();
+        await updateGoal(editingId, { title: title.trim(), requirement: requirement.trim() });
+        setEditingId(null);
+      })} />
+      <Button title="Cancel" disabled={busy} onPress={() => {
+        setEditingId(null);
+        setAdding(false);
+        setError('');
+      }} />
+    </View>
+  );
+
   return (
     <View style={styles.section}>
       <Text accessibilityRole="header" style={styles.heading}>Goals</Text>
@@ -91,28 +112,25 @@ export default function GameGoals({ gameId, onChange }) {
         error ? <Button title="Retry goals" onPress={() => setAttempt(n => n + 1)} /> : <Text>Loading goals…</Text>
       ) : (
         <>
-          {goals.map(goal => (
+          {goals.map(goal => goal.id === editingId ? <View key={goal.id} style={styles.card}>{form}</View> : (
             <View key={goal.id} style={[styles.card, goal.completed && styles.complete]}>
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: goal.completed, disabled: busy }}
-                accessibilityLabel={goal.title} disabled={busy} onPress={() => saveChange(() => toggle(goal))}
+                accessibilityLabel={goal.title} disabled={busy} onPress={() => saveChange(() => updateGoal(goal.id, { completed: !goal.completed }))}
                 style={styles.check}>
                 <Text style={styles.title}>{goal.completed ? '☑' : '☐'}  {goal.title}</Text>
               </Pressable>
               {!!goal.requirement && <Text>{goal.requirement}</Text>}
+              <Button title="Edit goal" disabled={busy || formOpen} onPress={() => {
+                setTitle(goal.title);
+                setRequirement(goal.requirement);
+                setEditingId(goal.id);
+                setError('');
+              }} />
               <Button title="Delete goal" color="#a21830" disabled={busy} onPress={() => confirmDelete(goal)} />
             </View>
           ))}
-          {adding ? (
-            <View style={styles.section}>
-              <Text>Goal</Text>
-              <TextInput accessibilityLabel="Goal" style={styles.input} maxLength={100} value={title} editable={!busy} onChangeText={setTitle} />
-              <Text>Requirement (optional)</Text>
-              <TextInput accessibilityLabel="Requirement" style={styles.input} multiline maxLength={500} value={requirement} editable={!busy} onChangeText={setRequirement} />
-              <Button title="Save goal" disabled={busy || !title.trim()} onPress={() => saveChange(addGoal)} />
-              <Button title="Cancel" disabled={busy} onPress={() => setAdding(false)} />
-            </View>
-          ) : (
-            <Button title="Add goal" disabled={busy} onPress={() => {
+          {adding ? form : (
+            <Button title="Add goal" disabled={busy || formOpen} onPress={() => {
               draftId.current = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
               setTitle('');
               setRequirement('');

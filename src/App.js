@@ -8,6 +8,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen from './AddGameScreen';
 import AuthScreen from './AuthScreen';
 import GameCover from './GameCover';
+import GameGoals from './GameGoals';
 import { deleteGame, loadGames, saveGame, updateGame } from './games';
 import { supabase } from './supabase';
 
@@ -88,7 +89,7 @@ function GameDetailsScreen({ navigation, route }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       {game ? (
         <>
           <Text accessibilityRole="header" style={styles.heading}>{game.title}</Text>
@@ -106,6 +107,7 @@ function GameDetailsScreen({ navigation, route }) {
             disabled={deleting}
             onPress={() => navigation.navigate('EditGame', { gameId: game.id })}
           />
+          <GameGoals key={game.id} gameId={game.id} />
           <Button
             title={deleting ? 'Deleting…' : 'Delete game'}
             color="#a21830"

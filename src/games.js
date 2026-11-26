@@ -11,7 +11,8 @@ export async function loadGames(userId, signal) {
   while (true) {
     const { data, error } = await supabase
       .from('games')
-      .select(gameColumns)
+      .select(`${gameColumns}, goals:game_goals(count), completed_goals:game_goals(count)`)
+      .eq('completed_goals.completed', true)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })

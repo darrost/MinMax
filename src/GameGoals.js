@@ -4,7 +4,7 @@ import { supabase } from './supabase';
 
 const columns = 'id, title, requirement, completed';
 
-export default function GameGoals({ gameId }) {
+export default function GameGoals({ gameId, onChange }) {
   const [goals, setGoals] = useState(null);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
@@ -46,6 +46,7 @@ export default function GameGoals({ gameId }) {
     setError('');
     try {
       await action();
+      void onChange();
     } catch {
       setError('Could not confirm the goal change. Try again.');
     } finally {

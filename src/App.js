@@ -50,6 +50,11 @@ function LibraryScreen({ navigation }) {
           <View style={styles.gameSummary}>
             <Text style={styles.gameTitle}>{item.title}</Text>
             <Text style={styles.gameMeta}>{[item.platform, ...(item.extra_platforms ?? [])].join(', ')} · {item.status}</Text>
+            {item.goals?.[0]?.count > 0 && (
+              <Text style={styles.gameMeta}>
+                {item.completed_goals?.[0]?.count ?? 0} of {item.goals[0].count} {item.goals[0].count === 1 ? 'goal' : 'goals'} complete
+              </Text>
+            )}
           </View>
         </Pressable>
       )}
@@ -58,7 +63,7 @@ function LibraryScreen({ navigation }) {
 }
 
 function GameDetailsScreen({ navigation, route }) {
-  const { games, removeGame } = useContext(LibraryContext);
+  const { games, removeGame, refresh } = useContext(LibraryContext);
   const game = games.find(({ id }) => id === route.params?.gameId);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
@@ -107,7 +112,7 @@ function GameDetailsScreen({ navigation, route }) {
             disabled={deleting}
             onPress={() => navigation.navigate('EditGame', { gameId: game.id })}
           />
-          <GameGoals key={game.id} gameId={game.id} />
+          <GameGoals key={game.id} gameId={game.id} onChange={refresh} />
           <Button
             title={deleting ? 'Deleting…' : 'Delete game'}
             color="#a21830"
@@ -228,7 +233,7 @@ function LibraryNavigator({ userId }) {
 
   async function editGame(gameId, changes, requestId, coverChange) {
     const savedGame = await updateGame(userId, gameId, changes, requestId, coverChange);
-    applyGameChange((currentGames) => currentGames.map((game) => (game.id === gameId ? savedGame : game)));
+    applyGameChange((currentGames) => currentGames.map((game) => (game.id === gameId ? { ...game, ...savedGame } : game)));
   }
 
   async function removeGame(gameId) {

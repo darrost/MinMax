@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Alert, AppState, Button, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import AddGameScreen from './AddGameScreen';
+import AddGameScreen, { GameChoices, platforms, statuses } from './AddGameScreen';
 import AuthScreen from './AuthScreen';
 import GameCover from './GameCover';
 import GameGoals from './GameGoals';
@@ -18,10 +18,18 @@ const LibraryContext = createContext(null);
 
 function LibraryScreen({ navigation }) {
   const { games, loading, loadError, refresh } = useContext(LibraryContext);
+  const [showFilters, setShowFilters] = useState(false);
+  const [status, setStatus] = useState('All');
+  const [platform, setPlatform] = useState('All');
+  const filtered = status !== 'All' || platform !== 'All';
+  const visibleGames = filtered ? games.filter(game =>
+    (status === 'All' || game.status === status) &&
+    (platform === 'All' || game.platform === platform || game.extra_platforms?.includes(platform))
+  ) : games;
 
   return (
     <FlatList
-      data={games}
+      data={visibleGames}
       keyExtractor={(game) => game.id}
       contentContainerStyle={styles.content}
       refreshing={loading}
@@ -29,6 +37,22 @@ function LibraryScreen({ navigation }) {
       ListHeaderComponent={
         <View style={styles.libraryHeader}>
           <Button title="Add game" onPress={() => navigation.navigate('AddGame')} />
+          <Button title={showFilters ? 'Hide filters' : 'Filters'} onPress={() => setShowFilters(open => !open)} />
+          {showFilters && (
+            <>
+              <GameChoices label="Status" options={['All', ...statuses]} value={status} onChange={setStatus} />
+              <GameChoices label="Platform" options={['All', ...platforms]} value={platform} onChange={setPlatform} />
+            </>
+          )}
+          {filtered && (
+            <View>
+              {!showFilters && <Text>{[status, platform].filter(value => value !== 'All').join(' · ')}</Text>}
+              <Button title="Clear filters" onPress={() => {
+                setStatus('All');
+                setPlatform('All');
+              }} />
+            </View>
+          )}
           {loadError && (
             <View>
               <Text accessibilityRole="alert">Could not load your games.</Text>
@@ -38,7 +62,9 @@ function LibraryScreen({ navigation }) {
         </View>
       }
       ListEmptyComponent={
-        !loading && !loadError ? <Text>Add your first game to start your library.</Text> : null
+        !loading && !loadError ? (
+          <Text>{games.length ? 'No games match these filters.' : 'Add your first game to start your library.'}</Text>
+        ) : null
       }
       renderItem={({ item }) => (
         <Pressable

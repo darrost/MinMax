@@ -5,11 +5,11 @@ import { Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from
 import GameCover from './GameCover';
 import { CoverUploadError } from './gameCovers';
 
-const platforms = ['PC', 'PlayStation', 'Xbox', 'Nintendo', 'Mobile', 'Other'];
-const statuses = ['Want to play', 'Playing', 'Paused', 'Finished'];
+export const platforms = ['PC', 'PlayStation', 'Xbox', 'Nintendo', 'Mobile', 'Other'];
+export const statuses = ['Want to play', 'Playing', 'Paused', 'Finished'];
 const maxCoverDimension = 1200;
 
-function GameChoices({ label, options, value, onChange, disabled, multiple = false }) {
+export function GameChoices({ label, options, value, onChange, disabled, multiple = false }) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>

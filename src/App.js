@@ -3,12 +3,12 @@ import { DarkTheme, NavigationContainer } from '@react-navigation/native';
 import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Alert, AppState, FlatList, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen, { GameChoices, platforms, statuses } from './AddGameScreen';
 import AuthScreen from './AuthScreen';
 import GameCover from './GameCover';
-import { GoalProgress, OutlineButton } from './LibraryControls';
+import { GoalProgress, OutlineButton, SearchIcon } from './LibraryControls';
 import GameGoals from './GameGoals';
 import { deleteGame, loadGames, saveGame, updateGame } from './games';
 import { supabase } from './supabase';
@@ -41,8 +41,12 @@ function LibraryScreen({ navigation }) {
   const [showFilters, setShowFilters] = useState(false);
   const [status, setStatus] = useState('All');
   const [platform, setPlatform] = useState('All');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const titleQuery = query.trim().toLowerCase();
   const filtered = status !== 'All' || platform !== 'All';
-  const visibleGames = filtered ? games.filter(game =>
+  const visibleGames = filtered || titleQuery ? games.filter(game =>
+    game.title.toLowerCase().includes(titleQuery) &&
     (status === 'All' || game.status === status) &&
     (platform === 'All' || game.platform === platform || game.extra_platforms?.includes(platform))
   ) : games;
@@ -55,12 +59,37 @@ function LibraryScreen({ navigation }) {
       contentContainerStyle={styles.libraryContent}
       refreshing={loading}
       onRefresh={refresh}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
       ListHeaderComponent={
         <View style={styles.libraryHeader}>
           <View style={styles.toolbar}>
             <OutlineButton style={styles.toolbarItem} title="Add game" icon="＋" onPress={() => navigation.navigate('AddGame')} />
             <OutlineButton style={styles.toolbarItem} title={showFilters ? 'Hide filters' : 'Filters'} icon="≡" onPress={() => setShowFilters(open => !open)} />
           </View>
+          {searchOpen ? (
+            <View style={styles.toolbar}>
+              <TextInput
+                accessibilityLabel="Search games by title"
+                placeholder="Search by title"
+                placeholderTextColor="#adcae8"
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                keyboardAppearance="dark"
+              />
+              <OutlineButton compact title="Close and clear search" icon="×" onPress={() => {
+                setQuery('');
+                setSearchOpen(false);
+              }} />
+            </View>
+          ) : (
+            <OutlineButton title="Search by title" icon={<SearchIcon />} onPress={() => setSearchOpen(true)} />
+          )}
           {showFilters && (
             <>
               <GameChoices label="Status" options={['All', ...statuses]} value={status} onChange={setStatus} />
@@ -86,7 +115,8 @@ function LibraryScreen({ navigation }) {
       }
       ListEmptyComponent={
         !loading && !loadError ? (
-          <Text style={styles.gameMeta}>{games.length ? 'No games match these filters.' : 'Add your first game to start your library.'}</Text>
+          <Text style={styles.gameMeta}>{!games.length ? 'Add your first game to start your library.' :
+            titleQuery ? 'No matching games. Try another title or check your filters.' : 'No games match these filters.'}</Text>
         ) : null
       }
       renderItem={({ item }) => (
@@ -457,6 +487,11 @@ const styles = StyleSheet.create({
   libraryHeader: { gap: 12, marginBottom: 6 },
   toolbar: { flexDirection: 'row', gap: 10 },
   toolbarItem: { flex: 1 },
+  searchInput: {
+    flex: 1, minWidth: 0, minHeight: 46, paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 23, borderWidth: 1, borderColor: '#70cbff', backgroundColor: '#171f4a',
+    color: '#f7f9ff', fontSize: 16,
+  },
   gameRow: {
     overflow: 'hidden', flexDirection: 'row', alignItems: 'center', minHeight: 92,
     borderRadius: 16, borderWidth: 1, borderColor: '#3d4877', backgroundColor: '#171f4a',

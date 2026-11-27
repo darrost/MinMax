@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { OutlineButton } from './LibraryControls';
 import { loadGameCoverUrl } from './gameCovers';
 
-export default function GameCover({ path, localUri, thumbnail = false }) {
+export default function GameCover({ path, localUri, thumbnail = false, hero = false }) {
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -22,9 +23,9 @@ export default function GameCover({ path, localUri, thumbnail = false }) {
     if (thumbnail) return null;
     return (
       <View>
-        <Text accessibilityRole="alert">Could not display the cover photo.</Text>
+        <Text style={{ color: '#ffb3c3' }} accessibilityRole="alert">Could not display the cover photo.</Text>
         {path && (
-          <Button
+          <OutlineButton
             title="Retry cover"
             onPress={() => {
               setUrl(null);
@@ -39,7 +40,7 @@ export default function GameCover({ path, localUri, thumbnail = false }) {
 
   const uri = localUri ?? url;
   if (!uri) {
-    if (thumbnail) return <View style={styles.thumbnail} />;
+    if (thumbnail) return <View style={styles.artwork} />;
     return <ActivityIndicator accessibilityLabel="Loading cover photo" />;
   }
 
@@ -48,9 +49,9 @@ export default function GameCover({ path, localUri, thumbnail = false }) {
       accessibilityLabel={thumbnail ? undefined : 'Game cover photo'}
       accessible={!thumbnail}
       source={{ uri }}
-      resizeMode={thumbnail ? 'cover' : 'contain'}
+      resizeMode={thumbnail || hero ? 'cover' : 'contain'}
       onError={() => setFailed(true)}
-      style={thumbnail ? styles.thumbnail : styles.cover}
+      style={thumbnail ? styles.thumbnail : hero ? styles.hero : styles.cover}
     />
   );
 
@@ -65,7 +66,10 @@ export default function GameCover({ path, localUri, thumbnail = false }) {
         blurRadius={22}
         style={styles.rowTint}
       />
-      {photo}
+      <View style={styles.artwork}>
+        {photo}
+        <View pointerEvents="none" style={styles.fade} />
+      </View>
     </>
   );
 }
@@ -73,18 +77,22 @@ export default function GameCover({ path, localUri, thumbnail = false }) {
 const styles = StyleSheet.create({
   rowTint: {
     ...StyleSheet.absoluteFill,
-    opacity: 0.13,
+    opacity: 0.26,
+  },
+  artwork: { width: '36%', alignSelf: 'stretch' },
+  fade: {
+    ...StyleSheet.absoluteFill,
+    backgroundImage: 'linear-gradient(90deg, transparent 68%, rgba(23,31,74,0.85) 100%)',
   },
   thumbnail: {
-    width: 88,
-    height: 64,
-    borderRadius: 6,
-    backgroundColor: '#edf1f6',
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#101737',
   },
+  hero: { width: '100%', aspectRatio: 2.1, borderRadius: 16, backgroundColor: '#171f4a' },
   cover: {
     width: '100%',
     height: 200,
     borderRadius: 8,
-    backgroundColor: '#edf1f6',
+    backgroundColor: '#171f4a',
   },
 });

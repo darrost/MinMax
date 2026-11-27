@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { launchImageLibraryAsync } from 'expo-image-picker';
-import { Button, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { OutlineButton } from './LibraryControls';
 import GameCover from './GameCover';
 import { CoverUploadError } from './gameCovers';
 
@@ -24,7 +25,7 @@ export function GameChoices({ label, options, value, onChange, disabled, multipl
               accessibilityState={{ checked: selected, disabled }}
               disabled={disabled}
               onPress={() => onChange(option)}
-              style={[styles.choice, selected && styles.selectedChoice]}
+              style={({ pressed }) => [styles.choice, selected && styles.selectedChoice, pressed && styles.pressed]}
             >
               <Text style={[styles.choiceText, selected && styles.selectedChoiceText]}>
                 {option}
@@ -124,54 +125,60 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
 
   return (
     <ScrollView
+      style={styles.canvas}
       automaticallyAdjustKeyboardInsets
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.content}
     >
-      <View style={styles.field}>
-        <Text style={styles.label}>Game title</Text>
-        <TextInput
-          accessibilityLabel="Game title"
-          editable={!saving}
-          style={styles.input}
-          value={title}
-          onChangeText={setTitle}
-          maxLength={100}
-        />
-        {submitted && titleInvalid && (
-          <Text accessibilityRole="alert" style={styles.error}>
-            Enter a title with at least 2 characters.
-          </Text>
+      <View style={styles.card}>
+        <View style={styles.field}>
+          <Text style={styles.label}>Game title</Text>
+          <TextInput keyboardAppearance="dark"
+            accessibilityLabel="Game title"
+            editable={!saving}
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            maxLength={100}
+          />
+          {submitted && titleInvalid && (
+            <Text accessibilityRole="alert" style={styles.error}>
+              Enter a title with at least 2 characters.
+            </Text>
+          )}
+        </View>
+
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityLabel="Cross-platform save"
+          accessibilityState={{ checked: crossSave, disabled: saving }}
+          disabled={saving}
+          style={({ pressed }) => [styles.choice, styles.crossSaveRow, crossSave && styles.selectedChoice, pressed && styles.pressed]}
+          onPress={() => {
+            if (crossSave) setSelectedPlatforms(current => current.slice(0, 1));
+            setCrossSave(!crossSave);
+          }}
+        >
+          <View style={[styles.checkbox, crossSave && styles.checkedBox]}>
+            {crossSave && <View style={styles.checkmark} />}
+          </View>
+          <Text style={styles.crossSaveLabel}>Cross-platform save</Text>
+        </Pressable>
+        <GameChoices label={crossSave ? 'Platforms (select all that apply)' : 'Platform'} options={platforms}
+          value={crossSave ? selectedPlatforms : platform} multiple={crossSave} onChange={choosePlatform} disabled={saving} />
+        {submitted && !platform && (
+          <Text accessibilityRole="alert" style={styles.error}>Choose a platform.</Text>
+        )}
+
+        <GameChoices label="Status" options={statuses} value={status} onChange={setStatus} disabled={saving} />
+        {submitted && !status && (
+          <Text accessibilityRole="alert" style={styles.error}>Choose a status.</Text>
         )}
       </View>
 
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityLabel="Cross-platform save"
-        accessibilityState={{ checked: crossSave, disabled: saving }}
-        disabled={saving}
-        style={styles.choice}
-        onPress={() => {
-          if (crossSave) setSelectedPlatforms(current => current.slice(0, 1));
-          setCrossSave(!crossSave);
-        }}
-      >
-        <Text style={styles.choiceText}>{crossSave ? '☑' : '☐'}  Cross-platform save</Text>
-      </Pressable>
-      <GameChoices label={crossSave ? 'Platforms (select all that apply)' : 'Platform'} options={platforms}
-        value={crossSave ? selectedPlatforms : platform} multiple={crossSave} onChange={choosePlatform} disabled={saving} />
-      {submitted && !platform && (
-        <Text accessibilityRole="alert" style={styles.error}>Choose a platform.</Text>
-      )}
-
-      <GameChoices label="Status" options={statuses} value={status} onChange={setStatus} disabled={saving} />
-      {submitted && !status && (
-        <Text accessibilityRole="alert" style={styles.error}>Choose a status.</Text>
-      )}
-
-      <View style={styles.field}>
+      <View style={styles.card}>
         <Text style={styles.label}>Where I left off (optional)</Text>
-        <TextInput
+        <TextInput keyboardAppearance="dark"
           accessibilityLabel="Where I left off"
           editable={!saving}
           style={[styles.input, styles.notes]}
@@ -183,18 +190,18 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
         />
       </View>
 
-      <View style={styles.field}>
+      <View style={styles.card}>
         <Text style={styles.label}>Cover photo (optional)</Text>
         {displayedCover && (
           <GameCover key={displayedCover} path={savedCoverPath} localUri={coverChange} />
         )}
-        <Button
-          title={pickingCover ? 'Preparing cover…' : displayedCover ? 'Replace cover' : 'Choose cover'}
+        <OutlineButton style={styles.coverButton} icon={displayedCover || pickingCover ? undefined : "+"}
+          title={pickingCover ? 'Preparing cover…' : displayedCover ? 'Replace cover photo' : 'Add cover photo'}
           onPress={chooseCover}
           disabled={saving || pickingCover}
         />
         {displayedCover && (
-          <Button
+          <OutlineButton destructive
             title="Remove cover"
             onPress={() => {
               setCoverChange(null);
@@ -215,7 +222,7 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
           {saveError}
         </Text>
       )}
-      <Button
+      <OutlineButton style={styles.saveButton}
         title={saving ? 'Saving…' : initialGame ? 'Save changes' : 'Save game'}
         onPress={handleSave}
         disabled={saving || pickingCover}
@@ -226,25 +233,36 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 24,
+    padding: 16,
+    width: '100%', maxWidth: 560, alignSelf: 'center',
     gap: 16,
   },
+  canvas: { flex: 1, backgroundColor: '#0a0d27' },
+  card: { padding: 16, gap: 12, borderRadius: 16, borderWidth: 1, borderColor: '#3d4877', backgroundColor: '#171f4a' },
+  crossSaveRow: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 12, minHeight: 52 },
+  crossSaveLabel: { flexShrink: 1, color: '#f7f9ff', fontSize: 17, fontWeight: '700' },
+  checkbox: { width: 28, height: 28, borderRadius: 7, borderWidth: 2, borderColor: '#adcae8', alignItems: 'center', justifyContent: 'center' },
+  checkedBox: { backgroundColor: '#70cbff', borderColor: '#70cbff' },
+  checkmark: { width: 10, height: 17, marginTop: -3, borderRightWidth: 3, borderBottomWidth: 3, borderColor: '#0a0d27', transform: [{ rotate: '45deg' }] },
+  coverButton: { minHeight: 52, borderColor: '#90d8ff', backgroundColor: '#0a0d27' },
+  saveButton: { borderColor: '#70cbff' },
+  pressed: { opacity: 0.7 },
   field: {
     gap: 8,
   },
   label: {
-    color: '#182134',
+    color: '#eff5fb',
     fontSize: 16,
     fontWeight: '600',
   },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: '#8290a6',
-    borderRadius: 8,
+    borderColor: '#7488ac',
+    borderRadius: 12,
     padding: 12,
-    backgroundColor: '#ffffff',
-    color: '#182134',
+    backgroundColor: '#0a0d27',
+    color: '#eff5fb',
     fontSize: 16,
   },
   notes: {
@@ -261,16 +279,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#8290a6',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
+    borderColor: '#7488ac',
+    borderRadius: 999,
+    backgroundColor: 'transparent',
   },
   selectedChoice: {
-    backgroundColor: '#1b4d91',
-    borderColor: '#1b4d91',
+    backgroundColor: '#293e80',
+    borderColor: '#70cbff',
   },
   choiceText: {
-    color: '#182134',
+    color: '#eff5fb',
     fontSize: 15,
   },
   selectedChoiceText: {
@@ -278,6 +296,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   error: {
-    color: '#a21830',
+    color: '#ffb3c3',
   },
 });

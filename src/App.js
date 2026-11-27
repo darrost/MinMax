@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { DarkTheme, NavigationContainer } from '@react-navigation/native';
+import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Alert, AppState, Button, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen, { GameChoices, platforms, statuses } from './AddGameScreen';
 import AuthScreen from './AuthScreen';
 import GameCover from './GameCover';
+import { GoalProgress, OutlineButton } from './LibraryControls';
 import GameGoals from './GameGoals';
 import { deleteGame, loadGames, saveGame, updateGame } from './games';
 import { supabase } from './supabase';
@@ -15,6 +16,25 @@ import { supabase } from './supabase';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 const LibraryContext = createContext(null);
+const navigationTheme = {
+  ...DarkTheme,
+  colors: { ...DarkTheme.colors, background: '#0a0d27', card: '#101638', primary: '#70cbff' },
+};
+
+const infoHeader = {
+  headerStyle: { backgroundColor: '#0a0d27' },
+  headerTintColor: '#d9e6f5',
+  headerShadowVisible: false,
+  contentStyle: { backgroundColor: '#0a0d27' },
+};
+
+function GlassTabBar(props) {
+  return (
+    <SafeAreaView edges={['bottom', 'left', 'right']} style={styles.tabCanvasBase}>
+      <BottomTabBar {...props} insets={{ ...props.insets, bottom: 0, left: 0, right: 0 }} />
+    </SafeAreaView>
+  );
+}
 
 function LibraryScreen({ navigation }) {
   const { games, loading, loadError, refresh } = useContext(LibraryContext);
@@ -31,13 +51,16 @@ function LibraryScreen({ navigation }) {
     <FlatList
       data={visibleGames}
       keyExtractor={(game) => game.id}
-      contentContainerStyle={styles.content}
+      style={styles.canvas}
+      contentContainerStyle={styles.libraryContent}
       refreshing={loading}
       onRefresh={refresh}
       ListHeaderComponent={
         <View style={styles.libraryHeader}>
-          <Button title="Add game" onPress={() => navigation.navigate('AddGame')} />
-          <Button title={showFilters ? 'Hide filters' : 'Filters'} onPress={() => setShowFilters(open => !open)} />
+          <View style={styles.toolbar}>
+            <OutlineButton style={styles.toolbarItem} title="Add game" icon="＋" onPress={() => navigation.navigate('AddGame')} />
+            <OutlineButton style={styles.toolbarItem} title={showFilters ? 'Hide filters' : 'Filters'} icon="≡" onPress={() => setShowFilters(open => !open)} />
+          </View>
           {showFilters && (
             <>
               <GameChoices label="Status" options={['All', ...statuses]} value={status} onChange={setStatus} />
@@ -46,8 +69,8 @@ function LibraryScreen({ navigation }) {
           )}
           {filtered && (
             <View>
-              {!showFilters && <Text>{[status, platform].filter(value => value !== 'All').join(' · ')}</Text>}
-              <Button title="Clear filters" onPress={() => {
+              {!showFilters && <Text style={styles.gameMeta}>{[status, platform].filter(value => value !== 'All').join(' · ')}</Text>}
+              <OutlineButton title="Clear filters" onPress={() => {
                 setStatus('All');
                 setPlatform('All');
               }} />
@@ -55,34 +78,38 @@ function LibraryScreen({ navigation }) {
           )}
           {loadError && (
             <View>
-              <Text accessibilityRole="alert">Could not load your games.</Text>
-              <Button title="Try again" onPress={refresh} />
+              <Text style={styles.gameMeta} accessibilityRole="alert">Could not load your games.</Text>
+              <OutlineButton title="Try again" onPress={refresh} />
             </View>
           )}
         </View>
       }
       ListEmptyComponent={
         !loading && !loadError ? (
-          <Text>{games.length ? 'No games match these filters.' : 'Add your first game to start your library.'}</Text>
+          <Text style={styles.gameMeta}>{games.length ? 'No games match these filters.' : 'Add your first game to start your library.'}</Text>
         ) : null
       }
       renderItem={({ item }) => (
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.gameRow, pressed && styles.gameRowPressed]}
+        <TouchableOpacity
+          accessibilityRole="button" activeOpacity={0.72} delayPressIn={0}
+          style={styles.gameRow}
           onPress={() => navigation.navigate('GameDetails', { gameId: item.id })}
         >
           {item.cover_path && <GameCover key={item.cover_path} path={item.cover_path} thumbnail />}
           <View style={styles.gameSummary}>
             <Text style={styles.gameTitle}>{item.title}</Text>
-            <Text style={styles.gameMeta}>{[item.platform, ...(item.extra_platforms ?? [])].join(', ')} · {item.status}</Text>
+            <Text style={styles.gameMeta}>{[item.platform, ...(item.extra_platforms ?? [])].join(', ')} · <Text style={styles.status}>{item.status}</Text></Text>
             {item.goals?.[0]?.count > 0 && (
+              <>
               <Text style={styles.gameMeta}>
                 {item.completed_goals?.[0]?.count ?? 0} of {item.goals[0].count} {item.goals[0].count === 1 ? 'goal' : 'goals'} complete
               </Text>
+                <GoalProgress completed={item.completed_goals?.[0]?.count ?? 0} total={item.goals[0].count} />
+              </>
             )}
           </View>
-        </Pressable>
+          <Text accessible={false} style={styles.chevron}>›</Text>
+        </TouchableOpacity>
       )}
     />
   );
@@ -120,45 +147,63 @@ function GameDetailsScreen({ navigation, route }) {
   }
 
   return (
-    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+    <ScrollView style={styles.canvas} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={styles.libraryContent}>
       {game ? (
         <>
-          <Text accessibilityRole="header" style={styles.heading}>{game.title}</Text>
-          {game.cover_path && <GameCover key={game.cover_path} path={game.cover_path} />}
-          <Text>{game.cross_save ? 'Cross-platform save' : 'Platform'}: {[game.platform, ...(game.extra_platforms ?? [])].join(', ')}</Text>
-          {game.status && <Text>Status: {game.status}</Text>}
-          {game.notes && (
-            <View>
+          {game.cover_path && <GameCover key={game.cover_path} path={game.cover_path} hero />}
+          <View style={styles.detailsHeading}>
+            <View style={styles.gameIdentity}>
+              <Text accessibilityRole="header" style={styles.heading}>{game.title}</Text>
+              <Text style={styles.gameMeta}>
+                {[game.platform, ...(game.extra_platforms ?? [])].join(', ')} · <Text style={styles.status}>{game.status}</Text>
+              </Text>
+              {game.cross_save && <Text style={styles.gameMeta}>Cross-platform save</Text>}
+            </View>
+            <OutlineButton compact title="Edit game" icon="✎" disabled={deleting}
+              onPress={() => navigation.navigate('EditGame', { gameId: game.id })} />
+          </View>
+          {!!game.notes && (
+            <View style={styles.noteCard}>
               <Text style={styles.noteLabel}>Where I left off</Text>
-              <Text>{game.notes}</Text>
+              <Text style={styles.infoText}>{game.notes}</Text>
             </View>
           )}
-          <Button
-            title="Edit game"
-            disabled={deleting}
-            onPress={() => navigation.navigate('EditGame', { gameId: game.id })}
-          />
           <GameGoals key={game.id} gameId={game.id} onChange={refresh} />
-          <Button
-            title={deleting ? 'Deleting…' : 'Delete game'}
-            color="#a21830"
-            disabled={deleting}
-            onPress={confirmDelete}
-          />
+          <OutlineButton destructive title={deleting ? 'Deleting…' : 'Delete game'} disabled={deleting} onPress={confirmDelete} />
           {deleteError && (
-            <Text accessibilityRole="alert">
+            <Text accessibilityRole="alert" style={styles.errorText}>
               Could not confirm deletion. Refresh the library or try again.
             </Text>
           )}
         </>
       ) : (
-        <Text>Game unavailable.</Text>
+        <Text style={styles.infoText}>Game unavailable.</Text>
       )}
     </ScrollView>
   );
 }
 
-function AboutScreen({ email }) {
+function AboutScreen() {
+  return (
+    <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+      <Text accessibilityRole="header" style={styles.heading}>How to use MinMax</Text>
+      <View style={styles.noteCard}>
+        <Text accessibilityRole="header" style={styles.noteLabel}>Track a game</Text>
+        <Text style={styles.infoText}>In Library, tap Add game. Enter a title, choose a platform and status, and save. Use “Where I left off” to remember what to do next.</Text>
+      </View>
+      <View style={styles.noteCard}>
+        <Text accessibilityRole="header" style={styles.noteLabel}>Track a shared save</Text>
+        <Text style={styles.infoText}>If your game supports cross-platform saves, check Cross-platform save and select the platforms where you play that save.</Text>
+      </View>
+      <View style={styles.noteCard}>
+        <Text accessibilityRole="header" style={styles.noteLabel}>Set goals</Text>
+        <Text style={styles.infoText}>Open a saved game to add a goal and describe its requirement. Check it off when you finish. Your Library shows how many goals you’ve completed.</Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+function AccountScreen({ email, navigation }) {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState('');
 
@@ -176,13 +221,22 @@ function AboutScreen({ email }) {
   }
 
   return (
-    <View style={styles.content}>
-      <Text accessibilityRole="header" style={styles.heading}>MinMax</Text>
-      <Text>Track your game backlog, save where you left off, and plan your next run.</Text>
-      <Text>Signed in as {email}</Text>
-      {error !== '' && <Text accessibilityRole="alert">{error}</Text>}
-      <Button title={signingOut ? 'Signing out…' : 'Sign out'} onPress={signOut} disabled={signingOut} />
-    </View>
+    <ScrollView style={styles.canvas} contentContainerStyle={styles.content}>
+      <View style={styles.detailsHeading}>
+        <View style={styles.profileButton}>
+          <View style={styles.profileHead} />
+          <View style={styles.profileShoulders} />
+        </View>
+        <Text accessibilityRole="header" style={styles.heading}>Your account</Text>
+      </View>
+      <View style={styles.noteCard}>
+        <Text style={styles.noteLabel}>Signed in as</Text>
+        <Text selectable style={styles.gameTitle}>{email}</Text>
+      </View>
+      {error !== '' && <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>}
+      <OutlineButton title="Close" onPress={() => navigation.goBack()} />
+      <OutlineButton destructive title={signingOut ? 'Signing out…' : 'Sign out'} onPress={signOut} disabled={signingOut} />
+    </ScrollView>
   );
 }
 
@@ -197,7 +251,7 @@ function EditGameRoute({ navigation, route }) {
   const game = games.find(({ id }) => id === route.params?.gameId);
 
   if (!game) {
-    return <View style={styles.content}><Text>Game unavailable.</Text></View>;
+    return <View style={styles.content}><Text style={styles.infoText}>Game unavailable.</Text></View>;
   }
 
   return (
@@ -210,7 +264,7 @@ function EditGameRoute({ navigation, route }) {
   );
 }
 
-function LibraryNavigator({ userId }) {
+function LibraryNavigator({ userId, email }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -269,14 +323,30 @@ function LibraryNavigator({ userId }) {
 
   return (
     <LibraryContext.Provider value={{ games, addGame, editGame, removeGame, loading, loadError, refresh }}>
-      <Stack.Navigator>
-        <Stack.Screen name="GameLibrary" component={LibraryScreen} options={{ title: 'Library' }} />
+      <Stack.Navigator screenOptions={infoHeader}>
+        <Stack.Screen name="GameLibrary" component={LibraryScreen} options={({ navigation }) => ({
+          title: 'Library',
+          headerTitleAlign: 'left', headerStyle: { backgroundColor: '#0a0d27' }, headerShadowVisible: false,
+          headerTintColor: '#f7f9ff', headerTitleStyle: { fontSize: 28, fontWeight: '700' },
+          headerRightBackgroundVisible: false,
+          headerRight: () => (
+            <Pressable accessibilityRole="button" accessibilityLabel="Open account"
+              style={({ pressed }) => [styles.profileButton, pressed && { opacity: 0.75 }]}
+              onPress={() => navigation.navigate('Account')}>
+              <View style={styles.profileHead} />
+              <View style={styles.profileShoulders} />
+            </Pressable>
+          ),
+        })} />
+        <Stack.Screen name="Account" options={{ presentation: 'formSheet', contentStyle: { backgroundColor: '#0a0d27' }, headerShown: false, sheetAllowedDetents: [0.5, 1], sheetGrabberVisible: true }}>
+          {({ navigation }) => <AccountScreen email={email} navigation={navigation} />}
+        </Stack.Screen>
         <Stack.Screen name="AddGame" component={AddGameRoute} options={{ title: 'Add Game' }} />
         <Stack.Screen name="EditGame" component={EditGameRoute} options={{ title: 'Edit Game' }} />
         <Stack.Screen
           name="GameDetails"
           component={GameDetailsScreen}
-          options={{ title: 'Game Details' }}
+          options={{ ...infoHeader, title: 'Game Details' }}
         />
       </Stack.Navigator>
     </LibraryContext.Provider>
@@ -320,12 +390,12 @@ export default function App() {
   if (!supabase || session === undefined) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
         <SafeAreaView style={styles.startup}>
           {supabase ? (
             <ActivityIndicator accessibilityLabel="Restoring your session" />
           ) : (
-            <Text accessibilityRole="alert">Set the Supabase project URL and publishable key in .env.local, then restart Expo.</Text>
+            <Text style={styles.errorText} accessibilityRole="alert">Set the Supabase project URL and publishable key in .env.local, then restart Expo.</Text>
           )}
         </SafeAreaView>
       </SafeAreaProvider>
@@ -333,19 +403,28 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
+    <NavigationContainer theme={navigationTheme}>
+      <StatusBar style="light" />
       {session ? (
-        <Tab.Navigator key={session.user.id}>
+        <Tab.Navigator tabBar={props => <GlassTabBar {...props} />} key={session.user.id} layout={({ children }) => <View style={styles.tabCanvas}>{children}</View>}
+          screenOptions={({ route }) => ({
+            tabBarLabelPosition: 'below-icon',
+            tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
+            tabBarStyle: styles.tabBar,
+            tabBarActiveTintColor: '#70cbff', tabBarInactiveTintColor: '#bbc4d8',
+            tabBarIcon: ({ color }) => route.name === 'About'
+              ? <Text accessible={false} style={{ color, fontSize: 23 }}>ⓘ</Text>
+              : <View style={styles.books}>
+                  {[0, 1, 2].map(i => <View key={i} style={[styles.book, { backgroundColor: color }, i === 2 && styles.tilt]} />)}
+                </View>,
+          })}>
           <Tab.Screen name="Library" options={{ headerShown: false }}>
-            {() => <LibraryNavigator userId={session.user.id} />}
+            {() => <LibraryNavigator userId={session.user.id} email={session.user.email} />}
           </Tab.Screen>
-          <Tab.Screen name="About">
-            {() => <AboutScreen email={session.user.email} />}
-          </Tab.Screen>
+          <Tab.Screen name="About" component={AboutScreen} options={infoHeader} />
         </Tab.Navigator>
       ) : (
-        <Stack.Navigator key="auth">
+        <Stack.Navigator key="auth" screenOptions={infoHeader}>
           <Stack.Screen name="SignIn" component={AuthScreen} options={{ title: 'Sign in' }} />
           <Stack.Screen name="SignUp" component={AuthScreen} options={{ title: 'Create account' }} />
         </Stack.Navigator>
@@ -355,7 +434,14 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  profileButton: {
+    width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'transparent', borderColor: '#8798b4', borderWidth: 1, gap: 2,
+  },
+  profileHead: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#70cbff' },
+  profileShoulders: { width: 20, height: 9, borderTopLeftRadius: 10, borderTopRightRadius: 10, backgroundColor: '#70cbff' },
   startup: {
+    backgroundColor: '#0a0d27',
     flex: 1,
     justifyContent: 'center',
     padding: 24,
@@ -364,40 +450,44 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 16,
   },
-  libraryHeader: {
-    gap: 16,
-    marginBottom: 16,
+  canvas: {
+    flex: 1, backgroundColor: '#0a0d27',
   },
+  libraryContent: { padding: 14, gap: 12, paddingBottom: 24 },
+  libraryHeader: { gap: 12, marginBottom: 6 },
+  toolbar: { flexDirection: 'row', gap: 10 },
+  toolbarItem: { flex: 1 },
   gameRow: {
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
+    overflow: 'hidden', flexDirection: 'row', alignItems: 'center', minHeight: 92,
+    borderRadius: 16, borderWidth: 1, borderColor: '#3d4877', backgroundColor: '#171f4a',
   },
-  gameRowPressed: {
-    backgroundColor: '#e3edf8',
+  gameSummary: { flex: 1, paddingVertical: 14, paddingLeft: 12, gap: 5 },
+  gameTitle: { color: '#f7f9ff', fontSize: 19, fontWeight: '700' },
+  gameMeta: { color: '#d1dbed', fontSize: 14 },
+  status: { color: '#90d8ff' },
+  chevron: { color: '#cbd7e5', fontSize: 23, paddingHorizontal: 9 },
+  tabCanvas: { flex: 1, backgroundColor: '#0a0d27' },
+  tabCanvasBase: { backgroundColor: '#0a0d27' },
+  tabBar: {
+    height: 62, marginHorizontal: 12, marginVertical: 5, borderRadius: 31,
+    paddingVertical: 5, borderWidth: 1, borderTopWidth: 1, borderColor: '#8798b4',
+    backgroundColor: 'transparent', overflow: 'hidden', elevation: 0,
   },
-  gameSummary: {
-    flex: 1,
-    gap: 4,
-  },
-  gameTitle: {
-    color: '#182134',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  gameMeta: {
-    color: '#485970',
-    fontSize: 15,
-  },
+  books: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  book: { width: 4, height: 16, borderRadius: 1 },
+  tilt: { transform: [{ rotate: '-12deg' }] },
+  infoText: { color: '#d2dfec', fontSize: 16, lineHeight: 23 },
+  errorText: { color: '#ffb3c3' },
+  detailsHeading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  gameIdentity: { flex: 1, gap: 4 },
+  noteCard: { borderRadius: 16, borderWidth: 1, borderColor: '#3d4877', backgroundColor: '#171f4a', padding: 14 },
   noteLabel: {
+    color: '#adcae8',
     fontWeight: '600',
     marginBottom: 4,
   },
   heading: {
+    color: '#eff5fb',
     fontSize: 22,
     fontWeight: '600',
   },

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { GoalProgress, OutlineButton } from './LibraryControls';
 import { supabase } from './supabase';
 
 const columns = 'id, title, requirement, completed';
@@ -80,23 +81,32 @@ export default function GameGoals({ gameId, onChange }) {
         const { error } = await supabase.from('game_goals').delete().eq('game_id', gameId).eq('id', goal.id);
         if (error) throw error;
         setGoals(current => current.filter(item => item.id !== goal.id));
+        setEditingId(null);
       }) },
     ]);
   }
 
+  function editGoal(goal) {
+    setTitle(goal.title);
+    setRequirement(goal.requirement);
+    setEditingId(goal.id);
+    setError('');
+  }
+
+  const completed = goals?.filter(goal => goal.completed).length ?? 0;
   const formOpen = adding || editingId !== null;
   const form = formOpen && (
     <View style={styles.section}>
-      <Text>Goal</Text>
+      <Text style={styles.body}>Goal</Text>
       <TextInput accessibilityLabel="Goal" style={styles.input} maxLength={100} value={title} editable={!busy} onChangeText={setTitle} />
-      <Text>Requirement (optional)</Text>
+      <Text style={styles.body}>Requirement (optional)</Text>
       <TextInput accessibilityLabel="Requirement" style={styles.input} multiline maxLength={500} value={requirement} editable={!busy} onChangeText={setRequirement} />
-      <Button title={adding ? 'Save goal' : 'Save changes'} disabled={busy || !title.trim()} onPress={() => saveChange(async () => {
+      <OutlineButton title={adding ? 'Save goal' : 'Save changes'} disabled={busy || !title.trim()} onPress={() => saveChange(async () => {
         if (adding) return addGoal();
         await updateGoal(editingId, { title: title.trim(), requirement: requirement.trim() });
         setEditingId(null);
       })} />
-      <Button title="Cancel" disabled={busy} onPress={() => {
+      <OutlineButton title="Cancel" disabled={busy} onPress={() => {
         setEditingId(null);
         setAdding(false);
         setError('');
@@ -106,31 +116,41 @@ export default function GameGoals({ gameId, onChange }) {
 
   return (
     <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.heading}>Goals</Text>
-      {error !== '' && <Text accessibilityRole="alert">{error}</Text>}
+      <View style={styles.summary}>
+        <Text accessibilityRole="header" style={styles.heading}>Goals</Text>
+        {goals && <Text style={styles.body}>{completed} of {goals.length} complete</Text>}
+      </View>
+      {goals && <GoalProgress completed={completed} total={goals.length} />}
+      {error !== '' && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
       {goals === null ? (
-        error ? <Button title="Retry goals" onPress={() => setAttempt(n => n + 1)} /> : <Text>Loading goals…</Text>
+        error ? <OutlineButton title="Retry goals" onPress={() => setAttempt(n => n + 1)} /> : <Text style={styles.body}>Loading goals…</Text>
       ) : (
         <>
-          {goals.map(goal => goal.id === editingId ? <View key={goal.id} style={styles.card}>{form}</View> : (
+          {goals.map(goal => goal.id === editingId ? (
+            <View key={goal.id} style={styles.card}>
+              {form}
+              <OutlineButton destructive title="Delete goal" disabled={busy} onPress={() => confirmDelete(goal)} />
+            </View>
+          ) : (
             <View key={goal.id} style={[styles.card, goal.completed && styles.complete]}>
-              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: goal.completed, disabled: busy }}
-                accessibilityLabel={goal.title} disabled={busy} onPress={() => saveChange(() => updateGoal(goal.id, { completed: !goal.completed }))}
-                style={styles.check}>
-                <Text style={styles.title}>{goal.completed ? '☑' : '☐'}  {goal.title}</Text>
-              </Pressable>
-              {!!goal.requirement && <Text>{goal.requirement}</Text>}
-              <Button title="Edit goal" disabled={busy || formOpen} onPress={() => {
-                setTitle(goal.title);
-                setRequirement(goal.requirement);
-                setEditingId(goal.id);
-                setError('');
-              }} />
-              <Button title="Delete goal" color="#a21830" disabled={busy} onPress={() => confirmDelete(goal)} />
+              <View style={styles.goalHeader}>
+                <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: goal.completed, disabled: busy }}
+                  accessibilityLabel={goal.title} disabled={busy} onPress={() => saveChange(() => updateGoal(goal.id, { completed: !goal.completed }))}
+                  style={({ pressed }) => [styles.check, pressed && { opacity: 0.65 }]}>
+                  <View style={styles.checkSlot}>
+                    <View style={[styles.box, goal.completed && styles.checkedBox]}>
+                      {goal.completed && <View style={styles.tick} />}
+                    </View>
+                  </View>
+                  <Text style={[styles.title, goal.completed && styles.completedTitle]}>{goal.title}</Text>
+                </Pressable>
+                <OutlineButton compact icon="✎" title={`Edit goal: ${goal.title}`} disabled={busy || formOpen} onPress={() => editGoal(goal)} />
+              </View>
+              {!!goal.requirement && <Text style={styles.requirement}>{goal.requirement}</Text>}
             </View>
           ))}
           {adding ? form : (
-            <Button title="Add goal" disabled={busy || formOpen} onPress={() => {
+            <OutlineButton icon="+" title="Add goal" disabled={busy || formOpen} onPress={() => {
               draftId.current = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
               setTitle('');
               setRequirement('');
@@ -144,11 +164,21 @@ export default function GameGoals({ gameId, onChange }) {
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 8 },
-  heading: { fontSize: 20, fontWeight: '600' },
-  card: { backgroundColor: '#ffffff', borderRadius: 8, padding: 12, gap: 4 },
-  complete: { backgroundColor: '#e3f1e6' },
-  check: { minHeight: 44, justifyContent: 'center' },
-  title: { fontSize: 16, fontWeight: '600' },
-  input: { minHeight: 44, borderWidth: 1, borderColor: '#8290a6', borderRadius: 8, padding: 10, backgroundColor: '#ffffff' },
+  body: { color: '#d2dfec' },
+  error: { color: '#ffb3c3' },
+  section: { gap: 12 },
+  summary: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  goalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heading: { color: '#eff5fb', fontSize: 20, fontWeight: '600' },
+  card: { borderWidth: 1, borderColor: '#3d4877', backgroundColor: '#171f4a', borderRadius: 16, padding: 14, gap: 4 },
+  complete: { backgroundColor: '#20392e', borderColor: '#63997a' },
+  completedTitle: { color: '#a8e7b6' },
+  check: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 46, gap: 8 },
+  checkSlot: { width: 46, alignItems: 'center' },
+  box: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 2, borderColor: '#90d8ff' },
+  checkedBox: { backgroundColor: '#a8e7b6', borderColor: '#a8e7b6' },
+  tick: { width: 10, height: 17, marginTop: -3, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#20392e', transform: [{ rotate: '45deg' }] },
+  title: { flex: 1, color: '#eff5fb', fontSize: 18, fontWeight: '600', textAlign: 'center' },
+  requirement: { color: '#d2dfec', fontSize: 16, lineHeight: 23 },
+  input: { minHeight: 44, borderWidth: 1, borderColor: '#8290a6', borderRadius: 8, padding: 10, backgroundColor: '#111837', color: '#eff5fb' },
 });

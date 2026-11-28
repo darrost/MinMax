@@ -8,9 +8,9 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen, { GameChoices, platforms, statuses } from './AddGameScreen';
 import AuthScreen from './AuthScreen';
 import GameCover from './GameCover';
-import { GoalProgress, OutlineButton, SearchIcon } from './LibraryControls';
+import { GoalProgress, OutlineButton, PinIcon, SearchIcon } from './LibraryControls';
 import GameGoals from './GameGoals';
-import { deleteGame, loadGames, saveGame, updateGame } from './games';
+import { deleteGame, loadGames, saveGame, setGamePinned, updateGame } from './games';
 import { supabase } from './supabase';
 
 const Tab = createBottomTabNavigator();
@@ -53,7 +53,7 @@ function LibraryScreen({ navigation }) {
 
   return (
     <FlatList
-      data={visibleGames}
+      data={[...visibleGames.filter(game => game.is_pinned), ...visibleGames.filter(game => !game.is_pinned)]}
       keyExtractor={(game) => game.id}
       style={styles.canvas}
       contentContainerStyle={styles.libraryContent}
@@ -127,6 +127,7 @@ function LibraryScreen({ navigation }) {
         >
           {item.cover_path && <GameCover key={item.cover_path} path={item.cover_path} thumbnail />}
           <View style={styles.gameSummary}>
+            {item.is_pinned && <Text style={styles.status}>Pinned</Text>}
             <Text style={styles.gameTitle}>{item.title}</Text>
             <Text style={styles.gameMeta}>{[item.platform, ...(item.extra_platforms ?? [])].join(', ')} · <Text style={styles.status}>{item.status}</Text></Text>
             {item.goals?.[0]?.count > 0 && (
@@ -146,11 +147,29 @@ function LibraryScreen({ navigation }) {
 }
 
 function GameDetailsScreen({ navigation, route }) {
-  const { games, removeGame, refresh } = useContext(LibraryContext);
+  const { games, removeGame, changePin, refresh } = useContext(LibraryContext);
   const game = games.find(({ id }) => id === route.params?.gameId);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
   const deletingRef = useRef(false);
+  const pinRequest = useRef(false);
+  const [pinning, setPinning] = useState(false);
+  const [pinError, setPinError] = useState(false);
+
+  async function togglePin() {
+    if (pinRequest.current || deletingRef.current) return;
+    pinRequest.current = true;
+    setPinning(true);
+    setPinError(false);
+    try {
+      await changePin(game.id, !game.is_pinned);
+    } catch {
+      setPinError(true);
+    } finally {
+      pinRequest.current = false;
+      setPinning(false);
+    }
+  }
 
   function confirmDelete() {
     Alert.alert('Delete game?', `Remove “${game.title}” from your library?`, [
@@ -189,9 +208,12 @@ function GameDetailsScreen({ navigation, route }) {
               </Text>
               {game.cross_save && <Text style={styles.gameMeta}>Cross-platform save</Text>}
             </View>
+            <OutlineButton title={game.is_pinned ? 'Unpin' : 'Pin'} icon={<PinIcon pinned={game.is_pinned} />}
+              disabled={pinning || deleting} onPress={togglePin} />
             <OutlineButton compact title="Edit game" icon="✎" disabled={deleting}
               onPress={() => navigation.navigate('EditGame', { gameId: game.id })} />
           </View>
+          {pinError && <Text accessibilityRole="alert" style={styles.errorText}>Could not update the pin. Try again.</Text>}
           {!!game.notes && (
             <View style={styles.noteCard}>
               <Text style={styles.noteLabel}>Where I left off</Text>
@@ -346,13 +368,18 @@ function LibraryNavigator({ userId, email }) {
     applyGameChange((currentGames) => currentGames.map((game) => (game.id === gameId ? { ...game, ...savedGame } : game)));
   }
 
+  async function changePin(gameId, pinned) {
+    const savedPin = await setGamePinned(userId, gameId, pinned);
+    applyGameChange(current => current.map(game => game.id === gameId ? { ...game, is_pinned: savedPin } : game));
+  }
+
   async function removeGame(gameId) {
     await deleteGame(userId, gameId);
     applyGameChange((currentGames) => currentGames.filter(({ id }) => id !== gameId));
   }
 
   return (
-    <LibraryContext.Provider value={{ games, addGame, editGame, removeGame, loading, loadError, refresh }}>
+    <LibraryContext.Provider value={{ games, addGame, editGame, removeGame, changePin, loading, loadError, refresh }}>
       <Stack.Navigator screenOptions={infoHeader}>
         <Stack.Screen name="GameLibrary" component={LibraryScreen} options={({ navigation }) => ({
           title: 'Library',

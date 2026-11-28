@@ -11,7 +11,7 @@ export async function loadGames(userId, signal) {
   while (true) {
     const { data, error } = await supabase
       .from('games')
-      .select(`${gameColumns}, goals:game_goals(count), completed_goals:game_goals(count)`)
+      .select(`${gameColumns}, is_pinned, goals:game_goals(count), completed_goals:game_goals(count)`)
       .eq('completed_goals.completed', true)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -88,6 +88,17 @@ export async function updateGame(userId, gameId, { title, platform, extra_platfo
     void removeUnusedGameCover(previousCoverPath);
   }
   return data;
+}
+
+export async function setGamePinned(userId, gameId, pinned) {
+  const { data, error } = await supabase.from('games')
+    .update({ is_pinned: pinned })
+    .eq('id', gameId)
+    .eq('user_id', userId)
+    .select('is_pinned')
+    .single();
+  if (error) throw error;
+  return data.is_pinned;
 }
 
 export async function deleteGame(userId, gameId) {

@@ -28,6 +28,17 @@ export function SearchIcon() {
   );
 }
 
+export function PinIcon({ pinned }) {
+  return (
+    <View style={styles.pinIcon} accessible={false}>
+      <View style={styles.pinCap} />
+      <View style={[styles.pinNeck, pinned && styles.pinFilled]} />
+      <View style={styles.pinShoulder} />
+      <View style={styles.pinStem} />
+    </View>
+  );
+}
+
 export function OutlineButton({ title, icon, onPress, disabled = false, compact = false, destructive = false, style }) {
   return (
     <TouchableOpacity accessibilityRole="button" accessibilityLabel={title} disabled={disabled} accessibilityState={{ disabled }} onPress={onPress}
@@ -46,6 +57,12 @@ const styles = StyleSheet.create({
   },
   actionIcon: { fontSize: 22, color: buttonColor },
   searchIcon: { width: 20, height: 20 },
+  pinIcon: { width: 20, height: 20, alignItems: 'center', transform: [{ rotate: '28deg' }] },
+  pinCap: { width: 12, height: 2.5, borderRadius: 1, backgroundColor: buttonColor },
+  pinNeck: { width: 8, height: 7, borderLeftWidth: 1.5, borderRightWidth: 1.5, borderColor: buttonColor },
+  pinFilled: { backgroundColor: buttonColor },
+  pinShoulder: { width: 16, height: 3.5, borderTopLeftRadius: 4, borderTopRightRadius: 4, backgroundColor: buttonColor },
+  pinStem: { width: 1.5, height: 7, borderRadius: 1, backgroundColor: buttonColor },
   lens: { width: 14, height: 14, borderWidth: 2, borderColor: buttonColor, borderRadius: 7 },
   handle: {
     position: 'absolute', left: 14, top: 11, width: 2, height: 9, borderRadius: 1,

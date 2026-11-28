@@ -64,7 +64,7 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
   const pickingCoverRef = useRef(false);
   const lastAttempt = useRef(null);
   const cleanTitle = title.trim();
-  const titleInvalid = cleanTitle.length < 2;
+  const titleInvalid = cleanTitle.length === 0;
   const savedCoverPath = coverChange === undefined ? initialGame?.cover_path : null;
   const displayedCover = coverChange ?? savedCoverPath;
 
@@ -143,7 +143,7 @@ export default function AddGameScreen({ navigation, onSave, initialGame }) {
           />
           {submitted && titleInvalid && (
             <Text accessibilityRole="alert" style={styles.error}>
-              Enter a title with at least 2 characters.
+              Enter a game title.
             </Text>
           )}
         </View>

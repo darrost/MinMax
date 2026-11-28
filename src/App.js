@@ -3,7 +3,7 @@ import { DarkTheme, NavigationContainer } from '@react-navigation/native';
 import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Alert, AppState, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AddGameScreen, { GameChoices, platforms, statuses } from './AddGameScreen';
 import AuthScreen from './AuthScreen';
@@ -57,8 +57,11 @@ function LibraryScreen({ navigation }) {
       keyExtractor={(game) => game.id}
       style={styles.canvas}
       contentContainerStyle={styles.libraryContent}
-      refreshing={loading}
-      onRefresh={refresh}
+      refreshControl={
+        <RefreshControl refreshing={loading} onRefresh={refresh}
+          tintColor={navigationTheme.colors.primary} colors={[navigationTheme.colors.primary]}
+          progressBackgroundColor={navigationTheme.colors.card} />
+      }
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
       ListHeaderComponent={
